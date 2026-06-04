@@ -914,8 +914,139 @@ async function handleChatCompletions(req, res) {
   await proxyChatRequest(res, payload, requestedModel);
 }
 
+function isImageOrVideoModel(modelId) {
+  return /image|video/i.test(modelId);
+}
+
+function calcNumFrames(durationSeconds, frameRate = 24) {
+  const target = Math.round(durationSeconds * frameRate);
+  const n = Math.max(1, Math.round((target - 1) / 8));
+  return Math.min(8 * n + 1, 441);
+}
+
+function extractImageUrls(msg) {
+  if (!msg) return [];
+  if (Array.isArray(msg.content)) {
+    return msg.content
+      .filter(p => p?.type === 'image_url' && p?.image_url?.url)
+      .map(p => p.image_url.url);
+  }
+  return [];
+}
+
+async function proxyImageRequest(res, payload, requestedModel) {
+  if (!config.apiKey) { writeOpenAIError(res, 503, 'no Agnes AI API key configured', 'server_error', 'no_api_key'); return; }
+  const msgs = payload.messages || [];
+  const lastUser = [...msgs].reverse().find(m => m.role === 'user');
+  const prompt = typeof lastUser?.content === 'string'
+    ? lastUser.content.replace(/^\[[^\]]+\]\s*/, '')
+    : (Array.isArray(lastUser?.content) ? lastUser.content.find(p => p?.type === 'text')?.text || '' : '');
+  const imageUrls = extractImageUrls(lastUser);
+  const isVideo = /video/i.test(requestedModel);
+  const ts = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  console.log(`${ts} [${isVideo ? 'Video' : 'Image'}]-[${requestedModel}]-${JSON.stringify(prompt.substring(0, 80))}`);
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), config.requestTimeout);
+    const endpoint = isVideo
+      ? `${config.upstreamBaseURL}/v1/videos`
+      : `${config.upstreamBaseURL}/v1/images/generations`;
+    const imageModel = /image/i.test(requestedModel)
+      ? (imageUrls.length > 1 ? 'agnes-image-2.0-flash' : 'agnes-image-2.1-flash')
+      : requestedModel;
+    const durationMatch = prompt.match(/(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/i);
+    const videoDuration = durationMatch ? parseFloat(durationMatch[1]) : 5;
+    const frameRate = 24;
+    const numFrames = calcNumFrames(videoDuration, frameRate);
+    let reqBody;
+    if (isVideo) {
+      reqBody = { model: requestedModel, prompt, width: 1280, height: 768, num_frames: numFrames, frame_rate: frameRate };
+      if (imageUrls.length === 1) {
+        reqBody.image = imageUrls[0];
+      } else if (imageUrls.length > 1) {
+        reqBody.extra_body = { image: imageUrls };
+      }
+    } else {
+      reqBody = { model: imageModel, prompt, n: 1, size: '1024x1024' };
+      if (imageUrls.length > 0) {
+        reqBody.extra_body = { image: imageUrls, response_format: 'url' };
+      }
+    }
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${config.apiKey}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(reqBody),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!resp.ok) { const errText = await resp.text(); writePassthroughError(res, resp.status, errText); return; }
+    const data = await resp.json();
+
+    let content = 'Generation completed but no output returned.';
+
+    if (isVideo) {
+      const taskId = data.task_id || data.id;
+      if (taskId) {
+        console.log(`[Video] Task ${taskId} queued (~${(numFrames / frameRate).toFixed(1)}s video), polling...`);
+        const maxWait = 10 * 60 * 1000;
+        const pollInterval = 4000;
+        const pollStart = Date.now();
+        let videoUrl = null;
+        while (Date.now() - pollStart < maxWait) {
+          await new Promise(r => setTimeout(r, pollInterval));
+          try {
+            const pollResp = await fetch(`${config.upstreamBaseURL}/v1/videos/${taskId}`, {
+              headers: { 'Authorization': `Bearer ${config.apiKey}` },
+              signal: AbortSignal.timeout(15000),
+            });
+            if (!pollResp.ok) { console.warn(`[Video] Poll HTTP ${pollResp.status}`); continue; }
+            const pollData = await pollResp.json();
+            console.log(`[Video] Status: ${pollData.status} progress: ${pollData.progress}`);
+            if (pollData.status === 'completed' || pollData.status === 'succeeded') {
+              videoUrl = pollData.video_url || pollData.remixed_from_video_id || pollData.url || pollData.output?.url || pollData.result?.url;
+              break;
+            }
+            if (pollData.status === 'failed' || pollData.status === 'error') {
+              content = `Video generation failed: ${pollData.error || pollData.message || 'unknown error'}`;
+              break;
+            }
+          } catch (e) { console.warn(`[Video] Poll error: ${e.message}`); }
+        }
+        if (videoUrl) content = `Video generated successfully!\n\nOpen this URL in your browser:\n${videoUrl}`;
+        else if (content === 'Generation completed but no output returned.') content = `Video timed out. Task ID: ${taskId}`;
+      }
+    } else {
+      const item = data.data?.[0];
+      if (item?.url) content = `Image generated successfully!\n\nOpen this URL in your browser:\n${item.url}`;
+      else if (item?.b64_json) content = `![Generated image](data:image/jpeg;base64,${item.b64_json})`;
+    }
+
+    const id = 'imgcmpl-' + Date.now();
+    const created = Math.floor(Date.now() / 1000);
+    if (payload.stream) {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+      res.write(`data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created, model: requestedModel, choices: [{ index: 0, delta: { role: 'assistant', content: '' }, finish_reason: null }] })}\n\n`);
+      res.write(`data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created, model: requestedModel, choices: [{ index: 0, delta: { content }, finish_reason: null }] })}\n\n`);
+      res.write(`data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created, model: requestedModel, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } else {
+      writeJSON(res, 200, { id, object: 'chat.completion', created, model: requestedModel, choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } });
+    }
+    console.log(`${ts} [${isVideo ? 'Video' : 'Image'}]-[${requestedModel}]-done`);
+  } catch (e) {
+    writeOpenAIError(res, 502, e.message, 'server_error', '');
+  }
+}
+
 async function proxyChatRequest(res, payload, requestedModel) {
   const reqStart = Date.now();
+
+  if (isImageOrVideoModel(requestedModel)) {
+    detectSessionSignal(payload);
+    await proxyImageRequest(res, payload, requestedModel);
+    return;
+  }
 
   const session = detectSessionSignal(payload);
 
