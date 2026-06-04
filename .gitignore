@@ -1,0 +1,22 @@
+# Runtime config — contains real API keys and platform credentials
+.config/config.json
+
+# Cache directory — binary wallpaper images
+.cache/
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor directories
+.vscode/
+.idea/
+
+# Node (defensive — project has zero deps)
+node_modules/
+npm-debug.log*
+
+# Environment files
+.env
+.env.*
