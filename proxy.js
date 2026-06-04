@@ -13,6 +13,7 @@ const AGNES_API_BASE = 'https://apihub.agnes-ai.com';
 const AGNES_MODELS_URL = 'https://apihub.agnes-ai.com/v1/models';
 const PLATFORM_BASE_URL = 'https://platform-backend.agnes-ai.com';
 const API_KEY_ENV_VAR = 'AGNES_API_KEY';
+const BING_USER_AGENT = BING_USER_AGENT;
 
 const IS_BUN = typeof Bun !== 'undefined';
 const RUNTIME_VERSION = IS_BUN ? Bun.version : process.version.replace('v', '');
@@ -300,11 +301,6 @@ class UpstreamClient {
     } catch (e) { clearTimeout(timer); throw e; }
   }
 
-  async getAccountInfo() { return null; }
-
-  async getStepPlanStatus() { return null; }
-
-  async getPlanStatus() { return null; }
 }
 
 // --- Platform Login ---
@@ -1150,13 +1146,13 @@ async function proxyChatRequest(res, payload, requestedModel) {
     }
 
     const errorBodyStr = (await readBodyWithDecompress(resp.body, resp.headers['content-encoding'])).toString();
-    if (isModelUnavailableError(errorBodyStr) || isQueryEngineError(errorBodyStr)) {
+    if (isModelUnavailableError(errorBodyStr) || isQueryEngineError(errorBodyStr) || isRateLimitError(resp.status)) {
       if (isLast) {
         console.log(`${ts} [Session#${sessNum}>${name}]-[${requestedModel}]-error:${resp.status}`);
         writePassthroughError(res, resp.status, errorBodyStr);
         return { retry: false };
       }
-      const reason = isQueryEngineError(errorBodyStr) ? 'query_engine' : 'unavailable';
+      const reason = isRateLimitError(resp.status) ? 'rate_limit' : isQueryEngineError(errorBodyStr) ? 'query_engine' : 'unavailable';
       console.log(`${ts} [Session#${sessNum}>${name}]-[${requestedModel}]-retry:${reason}`);
       return { retry: true };
     }
@@ -1175,6 +1171,10 @@ function isQueryEngineError(body) {
   return /not connected to the query engine/i.test(body);
 }
 
+function isRateLimitError(statusCode) {
+  return statusCode === 429;
+}
+
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5000;
 
@@ -1190,6 +1190,7 @@ async function retryLoop(fn) {
 
 function writePassthroughError(res, statusCode, body) {
   const trimmed = body.trim();
+  console.error(`[Upstream Error] HTTP ${statusCode} — ${trimmed.substring(0, 200)}`);
   try { const payload = JSON.parse(trimmed); writeOpenAIError(res, statusCode, payload.error?.message || payload.message || trimmed, payload.error?.type || 'upstream_error', payload.error?.code || ''); }
   catch (e) { writeOpenAIError(res, statusCode, trimmed, 'upstream_error', ''); }
 }
@@ -1332,7 +1333,7 @@ async function handleRequest(req, res) {
           return new Promise((resolve, reject) => {
             const u = new URL(imgUrl);
             const mod = u.protocol === 'https:' ? require('https') : require('http');
-            mod.get(imgUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }, resolve).on('error', reject);
+            mod.get(imgUrl, { headers: { 'User-Agent': BING_USER_AGENT } }, resolve).on('error', reject);
           });
         }).then(imgResp => {
           const chunks = [];
@@ -1352,7 +1353,7 @@ async function handleRequest(req, res) {
             const imgResp = await new Promise((resolve, reject) => {
               const u = new URL(imgUrl);
               const mod = u.protocol === 'https:' ? require('https') : require('http');
-              mod.get(imgUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }, resolve).on('error', reject);
+              mod.get(imgUrl, { headers: { 'User-Agent': BING_USER_AGENT } }, resolve).on('error', reject);
             });
             const chunks = [];
             await new Promise(resolve => { imgResp.on('data', c => chunks.push(c)); imgResp.on('end', resolve); });
@@ -1518,7 +1519,7 @@ async function handleRequest(req, res) {
       const imgResp = await new Promise((resolve, reject) => {
         const u = new URL(imgUrl);
         const mod = u.protocol === 'https:' ? require('https') : require('http');
-        mod.get(imgUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }, resolve).on('error', reject);
+        mod.get(imgUrl, { headers: { 'User-Agent': BING_USER_AGENT } }, resolve).on('error', reject);
       });
       const chunks = [];
       imgResp.on('data', c => chunks.push(c));

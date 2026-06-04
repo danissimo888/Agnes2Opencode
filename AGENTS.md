@@ -36,9 +36,6 @@ AGNES-PROXY/
 - `headers(stream)` — Returns Bearer token + Content-Type/Accept/Accept-Encoding headers + platform session cookie
 - `getUserInfo()` — `GET /v1/models` with 10s AbortController timeout to validate API key
 - `chatCompletions(body)` — `POST /v1/chat/completions` with configurable timeout, streaming-aware
-- `getAccountInfo()` — Dead stub, returns null; account data is fetched via `platformGetUserInfo()` directly
-- `getStepPlanStatus()` — Dead stub, returns null; plan data handled by `handleStepPlanStatus()`
-- `getPlanStatus()` — Dead stub, returns null; same as above
 
 ### 3. Platform Login
 
@@ -122,7 +119,7 @@ AGNES-PROXY/
 - `retryLoop(fn)` — Up to 3 attempts with exponential backoff (`RETRY_DELAY_MS * attempt`, i.e., 5s, 10s, 15s)
 - `MAX_RETRIES = 3` — Maximum retry attempts
 - `RETRY_DELAY_MS = 5000` — Base delay between retries
-- Retries on: `isModelUnavailableError()` ("this model is currently unavailable") and `isQueryEngineError()` ("not connected to the query engine")
+- Retries on: `isModelUnavailableError()` ("this model is currently unavailable"), `isQueryEngineError()` ("not connected to the query engine"), and `isRateLimitError()` (HTTP 429)
 - All other errors are passed through immediately
 
 ### 10. Test Mode
