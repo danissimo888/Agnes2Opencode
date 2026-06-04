@@ -1,156 +1,298 @@
 # Agnes2Opencode
 
-OpenAI-compatible proxy server for [Agnes AI](https://agnes-ai.com), providing access to Agnes LLM models through a unified API. Zero external dependencies — uses only Node.js built-in modules.
+**OpenAI-compatible proxy server for [Agnes AI](https://agnes-ai.com)** — use Agnes models with any OpenAI client, get a beautiful dashboard, and auto-configure opencode. Zero npm dependencies.
 
-<img width="1206" height="683" alt="image" src="https://github.com/user-attachments/assets/96f3e2d1-c566-4926-9fbb-e173f6c8652b" />
+[![Node.js](https://img.shields.io/badge/Node.js-v14%2B-green)](https://nodejs.org) [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE) [![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero-brightgreen)]()
 
-<img width="638" height="159" alt="image" src="https://github.com/user-attachments/assets/1a963114-d3c9-4e3c-9ac6-9516957b793e" />
+🇨🇳 [中文版 README](README_CN.md)
 
-<img width="1301" height="866" alt="image" src="https://github.com/user-attachments/assets/c2dd6e32-9f06-464c-ae68-c7d7f87c91c7" />
+---
 
+<img width="1206" height="683" alt="Dashboard UI" src="https://github.com/user-attachments/assets/96f3e2d1-c566-4926-9fbb-e173f6c8652b" />
+
+<img width="638" height="159" alt="opencode integration" src="https://github.com/user-attachments/assets/1a963114-d3c9-4e3c-9ac6-9516957b793e" />
+
+<img width="1301" height="866" alt="Plan status and key management" src="https://github.com/user-attachments/assets/c2dd6e32-9f06-464c-ae68-c7d7f87c91c7" />
+
+---
+
+## What Is This?
+
+Agnes2Opencode is a local proxy server that sits between your AI tools and the Agnes AI API. It exposes a standard OpenAI-compatible endpoint (`/v1/chat/completions`) so you can connect **any OpenAI client** — including opencode, Cursor, Continue, or your own code — to Agnes AI models.
+
+**Who is this for?**
+- opencode users who want to use Agnes AI as a provider
+- Developers building apps with the OpenAI SDK who want free Agnes AI access
+- Anyone who wants a dashboard to manage their Agnes AI keys and usage
+
+---
 
 ## Features
 
 - **OpenAI-Compatible API** — Standard `/v1/chat/completions` and `/v1/models` endpoints
-- **Streaming Support** — SSE streaming for chat completions
-- **Tool Schema Normalization** — Resolves `$ref` and `$defs` in tool schemas before forwarding
-- **Dashboard UI** — Liquid glass effects, model/key management, real-time stats, plan status
-- **Platform Login** — Login with Agnes AI account credentials, session persistence, auto-login on restart
-- **Auto-Config** — Automatically configures opencode provider on startup
-- **Dynamic Model Fetch** — Fetches available models from `https://apihub.agnes-ai.com/v1/models`
-- **Model Remapping** — Transparently translates legacy model IDs (`sapiens-ai/agnes-1.5-pro` → `agnes-2.0-flash`)
-- **Response Caching** — LRU cache for non-streaming responses (configurable TTL and max size)
-- **Multi-Key Support** — Rotate between multiple Agnes AI API keys with fingerprint-based sticky sessions
-- **AI Wallpaper** — Generate AI backgrounds via `agnes-image-2.1-flash`, preloaded to disk for instant display
-- **Plan Status** — View subscription status, usage windows, and billing info from the dashboard
-- **Retry Logic** — Automatic retry with exponential backoff for transient errors (model unavailable, query engine)
-- **Test Mode** — Mock responses for development without consuming API credits
-- **Zero Dependencies** — No npm packages required
+- **Streaming Support** — Server-Sent Events streaming for real-time responses
+- **Auto-Config opencode** — Automatically sets up Agnes as an opencode provider on startup
+- **Beautiful Dashboard** — Liquid-glass UI with model toggles, key manager, plan status, cache stats
+- **Multi-Key Rotation** — Distribute load across multiple API keys with sticky session tracking
+- **Platform Login** — Log in with your Agnes AI account, view plan status and usage
+- **Response Caching** — LRU cache for non-streaming responses (configurable TTL and size)
+- **Retry Logic** — Automatic retry with exponential backoff for transient upstream errors
+- **AI Wallpaper** — Generate AI backgrounds or use Bing daily photos in the dashboard
+- **Tool Schema Normalization** — Fixes `$ref`/`$defs` in tool schemas before forwarding to upstream
+- **Model Remapping** — Translates legacy model IDs to current equivalents automatically
+- **Test Mode** — Return mock responses without consuming API credits
+- **Zero Dependencies** — No `npm install` needed — pure Node.js built-in modules only
 
-## Available Models
+---
 
-| Model ID | Name | Capabilities |
-|----------|------|-------------|
-| `agnes-2.0-flash` | Agnes 2.0 Flash | Text generation, tool calling, 256K context |
-| `agnes-1.5-flash` | Agnes 1.5 Flash | Text generation, tool calling, 256K context |
-| `agnes-image-2.0-flash` | Agnes Image 2.0 Flash | Image generation (text/image → image) |
-| `agnes-image-2.1-flash` | Agnes Image 2.1 Flash | Image generation (text/image → image) |
-| `agnes-video-v2.0` | Agnes Video V2.0 | Video generation (text/image → video) |
+## Tutorial: Getting Started
 
-Legacy model IDs (`sapiens-ai/agnes-1.5-pro`, `sapiens-ai/agnes-1.5-lite`, etc.) are automatically remapped to their current equivalents.
+> **Quick start:** Get Agnes AI key → copy `config.example.json` to `config.json` → paste key → `node proxy.js` → open http://localhost:8080
 
-Models are dynamically fetched from `https://apihub.agnes-ai.com/v1/models` on startup with a 5-minute cache TTL.
+Follow these steps from zero to a working setup.
 
-## How the Free Tier Works
+### Step 1 — Get an Agnes AI API Key
 
-- **Indefinitely Free:**
-  The proprietary baseline models — such as Agnes-2.0-Flash — are free to use without a time trial or credit card.
+1. Go to [agnes-ai.com](https://platform.agnes-ai.com/) and create a free account
+2. Navigate to your API keys page
+3. Copy your key — it starts with `sk-`
 
-- **Dynamic Rate Limits:**
-  Rather than giving you a hard monthly number (like 1 million tokens), the platform throttles requests based on real-time server load. During peak hours, your generation speeds may slow down or briefly pause to prioritize paid developer traffic.
+> **Free Tier:** Agnes AI 2.0 models (like `agnes-2.0-flash`) are free with no credit card required. Rate limits are dynamic based on server load rather than a fixed monthly quota.
 
-Consider subscribing to keep the service up and available for everyone if you like it. [View Plans & Pricing](https://platform.agnes-ai.com/subscribe/subscription?from=website)
+---
 
-## Quick Start
+### Step 2 — Download the Proxy
 
+**Option A: Clone with Git**
 ```bash
-# Clone and start (zero deps — no npm install needed)
-cd AGNES-PROXY
-node proxy.js
-
-# Or use launcher (auto-detects Bun, falls back to Node)
-start.cmd
-
-# Or Node-only launcher
-start-node.cmd
-
-# Open dashboard
-open http://localhost:8080
+git clone https://github.com/danissimo888/Agnes2Opencode.git
+cd Agnes2Opencode
 ```
 
-## Authentication
+**Option B: Download ZIP**
 
-Get an Agnes AI API key from [agnes-ai.com](https://agnes-ai.com).
+Click **Code → Download ZIP** on the GitHub page, then extract it.
 
-Add to `.config/config.json`:
+---
+
+### Step 3 — Add Your API Key
+
+Copy the example config and add your key:
+
+```bash
+# macOS / Linux
+cp .config/config.example.json .config/config.json
+
+# Windows Command Prompt
+copy .config\config.example.json .config\config.json
+```
+
+Then open `.config/config.json` and replace the placeholder:
 
 ```json
 {
-  "API_KEY": "cpk-your-agnes-api-key"
+  "API_KEY": "sk-your-agnes-api-key-here"
 }
 ```
 
-Or set environment variable:
+> `config.json` is listed in `.gitignore` — it will never be accidentally committed.
+
+**Alternative — environment variable (no file editing needed):**
 
 ```bash
-set AGNES_API_KEY=cpk-your-agnes-api-key
+# Windows Command Prompt
+set AGNES_API_KEY=sk-your-key
+node proxy.js
+
+# Windows PowerShell
+$env:AGNES_API_KEY="sk-your-key"
+node proxy.js
+
+# macOS / Linux
+AGNES_API_KEY=sk-your-key node proxy.js
+```
+
+---
+
+### Step 4 — Start the Proxy
+
+**Windows (easiest):**
+Double-click `start.cmd` — it auto-detects Bun or Node.js, frees port 8080 if busy, and starts the proxy.
+
+**Any OS:**
+```bash
 node proxy.js
 ```
 
-## Configuration
+**With Bun (faster startup):**
+```bash
+bun proxy.js
+```
 
-Edit `.config/config.json` or set environment variables:
+You should see output like:
+```
+[Agnes Proxy] Listening on http://127.0.0.1:8080
+[Agnes Proxy] Dashboard: http://localhost:8080
+```
 
-| Key | Description | Default |
-|-----|-------------|---------|
-| `LISTEN_ADDR` | Proxy listen address | `127.0.0.1:8080` |
-| `UPSTREAM_BASE_URL` | Agnes AI API URL | `https://apihub.agnes-ai.com` |
-| `API_KEY` | Agnes AI API key | — |
-| `REQUEST_TIMEOUT` | Upstream request timeout | `15m` |
-| `API_KEYS` | Client API keys for proxy auth | `[]` (open access) |
-| `TOKENS` | Array of `{name, token, platformUsername, platformPassword}` for multi-key support | auto-populated |
-| `ENABLED_MODELS` | Models visible to clients | all fetched models |
-| `CACHE_TTL` | Response cache TTL | `60s` |
-| `CACHE_MAX_SIZE` | Max cached responses | `100` |
-| `CACHE_ENABLED` | Enable response caching | `true` |
-| `WALLPAPER_MODE` | Wallpaper source: `none`, `bing`, or `ai` | `bing` |
-| `WALLPAPER_PROMPT` | Prompt for AI wallpaper generation | `realistic vibrant colorful mountain range landscape` |
-| `TEST_MODE` | Return mock responses without calling upstream | `false` |
+---
 
-### Multi-Key Management
+### Step 5 — Open the Dashboard
 
-The proxy supports multiple Agnes AI API keys. Set `TOKENS` in config:
+Visit **http://localhost:8080** in your browser.
+
+The dashboard lets you:
+- View your plan status and usage
+- Add, edit, or delete API keys
+- Toggle which models are available
+- Monitor cache hits and API key health
+- Log in to your Agnes AI platform account
+- Switch wallpaper mode (None / Bing / AI Image)
+
+---
+
+### Step 6 — Connect to opencode
+
+1. Make sure the proxy is running (Step 4)
+2. Restart opencode
+3. When prompted for a provider, select **agnes**
+
+The proxy automatically writes the Agnes provider config to `~/.config/opencode/opencode.json`. A backup is created before the first edit. No manual JSON editing needed.
+
+---
+
+### Step 7 — Use with Any OpenAI Client
+
+Point your OpenAI client at `http://localhost:8080/v1`:
+
+**JavaScript / Node.js:**
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  baseURL: 'http://localhost:8080/v1',
+  apiKey: 'not-needed'  // proxy handles auth
+});
+
+const response = await client.chat.completions.create({
+  model: 'agnes-2.0-flash',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+
+console.log(response.choices[0].message.content);
+```
+
+**Python:**
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8080/v1",
+    api_key="not-needed"
+)
+
+response = client.chat.completions.create(
+    model="agnes-2.0-flash",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(response.choices[0].message.content)
+```
+
+**cURL:**
+```bash
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "agnes-2.0-flash",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+---
+
+## Available Models
+
+| Model ID | Type | Free Tier | Context |
+|----------|------|-----------|---------|
+| `agnes-2.0-flash` | Text | ✅ Yes | 256K |
+| `agnes-1.5-flash` | Text | ✅ Yes | 256K |
+| `agnes-image-2.0-flash` | Image | ✅ Yes | — |
+| `agnes-image-2.1-flash` | Image | ✅ Yes | — |
+| `agnes-video-v2.0` | Video | ✅ Yes | — |
+
+Models are fetched dynamically from Agnes AI on startup (5-minute cache). Legacy model IDs like `sapiens-ai/agnes-1.5-pro` are automatically remapped to current equivalents.
+
+---
+
+## How the Free Tier Works
+
+- **No credit card required** — The baseline models are free indefinitely
+- **Dynamic rate limits** — Instead of a hard monthly quota, the platform throttles based on real-time server load. Speeds may slow during peak hours to prioritize paid traffic
+- **Retry built-in** — The proxy automatically retries on transient errors with exponential backoff (5s → 10s → 15s, up to 3 attempts)
+
+If you find the service useful, consider [subscribing](https://platform.agnes-ai.com/subscribe/subscription?from=website) to support the platform.
+
+---
+
+## Configuration Reference
+
+Edit `.config/config.json` or set the equivalent environment variable:
+
+| Key | Env Variable | Description | Default |
+|-----|-------------|-------------|---------|
+| `LISTEN_ADDR` | `LISTEN_ADDR` | Proxy listen address | `127.0.0.1:8080` |
+| `UPSTREAM_BASE_URL` | `UPSTREAM_BASE_URL` | Agnes API base URL | `https://apihub.agnes-ai.com` |
+| `API_KEY` | `AGNES_API_KEY` | Your Agnes AI API key | — |
+| `REQUEST_TIMEOUT` | `REQUEST_TIMEOUT` | Upstream request timeout | `15m` |
+| `API_KEYS` | `API_KEYS` | Proxy auth keys (empty = open access) | `[]` |
+| `ENABLED_MODELS` | — | Models visible to clients | all |
+| `CACHE_TTL` | `CACHE_TTL` | Response cache time-to-live | `60s` |
+| `CACHE_MAX_SIZE` | `CACHE_MAX_SIZE` | Max cached responses | `100` |
+| `CACHE_ENABLED` | `CACHE_ENABLED` | Enable response caching | `true` |
+| `WALLPAPER_MODE` | — | `none`, `bing`, or `ai` | `bing` |
+| `WALLPAPER_PROMPT` | — | Prompt for AI wallpaper | `realistic vibrant colorful mountain range landscape` |
+| `TEST_MODE` | `TEST_MODE` | Return mock responses | `false` |
+
+---
+
+## Multi-Key Setup
+
+Add multiple API keys to distribute requests across accounts:
 
 ```json
 {
   "TOKENS": [
-    { "name": "Key 1", "token": "cpk-key-1" },
-    { "name": "Key 2", "token": "cpk-key-2" }
+    { "name": "Key 1", "token": "sk-your-first-key" },
+    { "name": "Key 2", "token": "sk-your-second-key" }
   ]
 }
 ```
 
-Each token can also store platform credentials for auto-login:
+Each key can also store platform credentials for auto-login:
 
 ```json
 {
   "TOKENS": [
     {
-      "name": "Key 1",
-      "token": "cpk-key-1",
-      "platformUsername": "user@example.com",
-      "platformPassword": "secret",
-      "platformToken": "",
-      "platformUser": null
+      "name": "Work",
+      "token": "sk-your-key",
+      "platformUsername": "you@example.com",
+      "platformPassword": "your-password"
     }
   ]
 }
 ```
 
-Manage keys via the **Dashboard → Manage Keys** modal (inline add/edit/delete).
+**How rotation works:** Each conversation is identified by an MD5 fingerprint of the first user message. Follow-up requests in the same conversation are pinned to the same key. New conversations cycle through keys round-robin. Messages are stamped with `[KeyName|sessN]` for server-side traceability.
 
-### Key Rotation & Session Tracking
+You can also manage keys from the **Dashboard → Manage Keys** panel without editing JSON.
 
-The proxy automatically rotates tokens across conversations using **fingerprint-based session tracking**.
-Each conversation is identified by an MD5 hash of the first user message (skipping auto title prompts).
-Follow-up requests (tool calls, continuations) in the same conversation are pinned to the same token
-automatically. A global session counter increments for each new conversation.
+---
 
-New conversations are stamped with `[KeyName|sessN]` in the first user message for server-side traceability.
+## Restricting Access (Proxy API Keys)
 
-### Proxy API Keys
-
-By default the proxy is open access. To restrict access, set `API_KEYS`:
+By default the proxy is open — anyone on the local network can use it. To require authentication:
 
 ```json
 {
@@ -158,117 +300,99 @@ By default the proxy is open access. To restrict access, set `API_KEYS`:
 }
 ```
 
-Clients must include the key:
+Clients must send the key in the header:
 
 ```bash
-curl -H "x-api-key: my-secret-key-1" http://localhost:8080/v1/models
 curl -H "Authorization: Bearer my-secret-key-1" http://localhost:8080/v1/models
+# or
+curl -H "x-api-key: my-secret-key-1" http://localhost:8080/v1/models
 ```
 
-## Usage
-
-### OpenAI-Compatible
-
-```javascript
-import OpenAI from 'openai';
-const client = new OpenAI({
-  baseURL: 'http://localhost:8080/v1',
-  apiKey: 'not-needed'
-});
-const response = await client.chat.completions.create({
-  model: 'agnes-2.0-flash',
-  messages: [{ role: 'user', content: 'Hello!' }]
-});
-```
-
-### opencode Integration
-
-The proxy auto-configures opencode on startup. Restart opencode after starting the proxy, then select the `agnes` provider.
-
-Provider config is written to `~/.config/opencode/opencode.json`. A backup (`openconfig.b4agnes.json`) is created before the first edit. Legacy `zenith` and `stepfun` providers are removed automatically.
-
-## Dashboard
-
-Access at `http://localhost:8080`:
-
-- **Plan Status** — Subscription name, expiry, 5-hour and weekly usage bars (or "No Plan" card with login/subscribe CTA)
-- **Cache Stats** — Real-time cache hits, misses, evictions
-- **API Key Status** — Online/Offline indicator per key
-- **SS Mode** — Blur sensitive tokens for screenshots
-- **Liquid Glass Effects** — Canvas-generated SVG displacement maps with refraction profiles
-- **Model Management** — Toggle models on/off with capability badges (reasoning, tools, vision, context)
-- **Key Manager** — Add/edit/delete API keys with inline editing, platform account info display
-- **Platform Login** — Login with Agnes AI account, view account info, logout
-- **Wallpaper Toggle** — Switch between None, Bing, and AI Image modes with configurable prompt
-- **Collapsible Sections** — Models, API Key, Quick Actions, Environment, Proxy Configuration
-- **Auto-refresh** — Health check every 15s, plan status every 30s
+---
 
 ## API Endpoints
 
-### Core API
+### Core
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/healthz` | Health check with API key status, uptime, platform login status, token state, cache stats |
-| `GET` | `/v1/models` | OpenAI models list |
-| `POST` | `/v1/chat/completions` | OpenAI chat completions (streaming, retry, caching) |
+| `GET` | `/healthz` | Health check — API key status, uptime, cache stats |
+| `GET` | `/v1/models` | OpenAI-format model list |
+| `POST` | `/v1/chat/completions` | Chat completions (streaming, caching, retry) |
 
-### Management API
+### Management
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` / `POST` | `/api/config` | Read/write proxy configuration |
-| `GET` | `/api/validate` | Validate API key against upstream |
-| `GET` | `/api/models` | List available model IDs with metadata |
-| `GET` | `/api/bg` | Wallpaper image (Bing daily, AI-generated, or 204 none) |
-| `POST` | `/api/generate-image` | Generate AI wallpaper, save to `.cache/ai-paper.jpg` |
-| `GET` / `POST` | `/api/keys` | Multi-key CRUD (add/update/delete) |
-| `GET` | `/api/account` | Platform user data (`{ logged_in, user }`) |
-| `GET` | `/api/step-plan-status` | Subscription plan status with usage windows |
-| `POST` | `/api/login` | Platform login with `{ username, password }` |
-| `POST` | `/api/logout` | Clear platform session and saved credentials |
-| `GET` | `/api/platform/user` | Platform user info (requires login) |
-| `GET` / `DELETE` | `/api/cache` | View/clear response cache |
+| `GET/POST` | `/api/config` | Read / write proxy config |
+| `GET` | `/api/validate` | Validate API key against Agnes upstream |
+| `GET` | `/api/models` | Model list with metadata |
+| `GET` | `/api/bg` | Dashboard wallpaper image |
+| `POST` | `/api/generate-image` | Generate AI wallpaper |
+| `GET/POST` | `/api/keys` | Multi-key CRUD |
+| `GET` | `/api/account` | Platform account info |
+| `GET` | `/api/step-plan-status` | Subscription plan + usage windows |
+| `POST` | `/api/login` | Login with platform credentials |
+| `POST` | `/api/logout` | Clear platform session |
+| `GET/DELETE` | `/api/cache` | View / clear response cache |
 
-## Architecture
+---
+
+## Troubleshooting
+
+**Port 8080 is already in use**
+`start.cmd` automatically kills whatever is using port 8080 before starting. If running manually, free the port first or change `LISTEN_ADDR` in config.
+
+**"Model unavailable" errors**
+The proxy retries automatically up to 3 times with exponential backoff. If errors persist, the Agnes AI service may be temporarily overloaded — wait a moment and try again.
+
+**Rate limited on free tier**
+Free tier rate limits are dynamic. Wait a few minutes and retry. The proxy's retry logic handles transient throttling automatically.
+
+**opencode doesn't show Agnes provider**
+Make sure the proxy is fully started before launching opencode. The auto-config writes on startup. If it still doesn't appear, check `~/.config/opencode/opencode.json` for the `agnes` provider entry.
+
+**Dashboard shows "No Plan" even after login**
+Log in through **Dashboard → Platform Login** with your agnes-ai.com account credentials. The plan status refreshes every 30 seconds.
+
+---
+
+## Architecture Overview
 
 ```
 proxy.js
 ├── Config System         — JSON + env vars, per-token credentials, duration parsing
 ├── LRU Response Cache    — MD5-keyed, configurable TTL/max size, streaming excluded
 ├── UpstreamClient        — HTTP client for apihub.agnes-ai.com
-│   ├── getUserInfo()     — GET /v1/models (validate key, 10s timeout)
-│   └── chatCompletions() — POST /v1/chat/completions (streaming-aware, configurable timeout)
-├── Platform Login        — Login/session management for platform account
-│   ├── loginToPlatform() — POST /api/user/login (15s timeout, persists to config)
-│   ├── platformGetUserInfo() — GET /api/user/self
-│   └── platformSession   — Token + user + expiry state
-├── Model Registry        — Fallback models, dynamic fetch (5min TTL), legacy remapping
-├── Tool Schema Norm.     — $ref resolution, nullable simplification, type normalization
-├── Retry Logic           — Up to 3 attempts, exponential backoff (5s/10s/15s)
-├── HTTP Handlers         — OpenAI + management endpoints
-├── Request Router        — Pathname-based routing
-├── AI Wallpaper          — Generates images via /v1/images/generations, preloads to disk
-├── Session Tracking      — Fingerprint-based sticky sessions with message stamping
-├── Opencode Config       — Auto-configures opencode provider, backup, cleanup
-└── Server Startup        — Validation, platform session restore, model fetch, listen with retry
+├── Platform Login        — Session management, JWT persistence, auto-login on restart
+├── Model Registry        — Dynamic fetch (5min TTL), fallback list, legacy remapping
+├── Tool Schema Norm.     — $ref resolution, nullable simplification
+├── Retry Logic           — 3 attempts, exponential backoff (5s/10s/15s)
+├── Session Tracking      — MD5 fingerprint → key index, sticky sessions, stamping
+├── Opencode Config       — Auto-writes provider config, backup, cleanup
+└── HTTP Router           — OpenAI + management endpoints
 
 dashboard.html
-├── Liquid Glass Engine   — Canvas-based displacement/specular maps with refraction profiles
-├── Plan Fieldset         — Subscription status, usage bars, login CTA
-├── Model Management      — Toggle models on/off with capability badges
-├── Key Manager           — Add/edit/delete API keys + account info
-├── Platform Login Modal  — Username/password login with status
-├── Wallpaper Toggle      — None / Bing / AI Image radio group + prompt input
-├── Cache Stats           — Real-time cache performance
-├── Auto-refresh          — Health (15s) + plan status (30s) polling
-└── Configuration Forms   — Listen addr, upstream URL, timeout, test mode
+├── Liquid Glass Engine   — Canvas displacement maps with refraction effects
+├── Plan Status Fieldset  — Subscription, usage bars, login/subscribe CTA
+├── Key Manager           — Add/edit/delete keys, platform account display
+├── Model Toggle          — Enable/disable models with capability badges
+├── Platform Login Modal  — Credentials form, session status
+├── Wallpaper Toggle      — None / Bing / AI Image + prompt input
+└── Auto-refresh          — Health (15s) + plan status (30s) polling
 ```
 
-## Dependencies
+---
 
-No external npm dependencies — uses Node.js built-in modules only: `fs`, `path`, `os`, `http`, `https`, `crypto`, `zlib`.
+## Requirements
+
+- **Node.js** v14+ OR **Bun** 1.0+
+- No `npm install` — zero external dependencies
+- Port 8080 available (configurable)
+- Agnes AI API key ([free signup](https://agnes-ai.com))
+
+---
 
 ## License
 
-MIT
+MIT — Based on the original Agnes proxy, with improvements including plan status display, plan-agnostic image generation, multi-key credential management, platform session persistence, and stability fixes.

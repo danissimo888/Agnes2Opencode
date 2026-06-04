@@ -4,10 +4,11 @@
 
 ```
 AGNES-PROXY/
-├── proxy.js              # Main proxy implementation (1602 lines)
+├── proxy.js              # Main proxy implementation (1844 lines)
 ├── dashboard.html        # Liquid glass dashboard with stats UI
 ├── .config/
-│   └── config.json       # Runtime configuration
+│   ├── config.json       # Runtime configuration (gitignored — never committed)
+│   └── config.example.json  # Template for new users (committed)
 ├── .cache/               # Response cache + wallpaper cache
 ├── package.json          # Project metadata (MIT, no deps)
 ├── start.cmd             # Auto-detect launcher (Bun preferred, Node fallback)
@@ -35,9 +36,9 @@ AGNES-PROXY/
 - `headers(stream)` — Returns Bearer token + Content-Type/Accept/Accept-Encoding headers + platform session cookie
 - `getUserInfo()` — `GET /v1/models` with 10s AbortController timeout to validate API key
 - `chatCompletions(body)` — `POST /v1/chat/completions` with configurable timeout, streaming-aware
-- `getAccountInfo()` — Returns null (unused)
-- `getStepPlanStatus()` — Returns null (unused)
-- `getPlanStatus()` — Returns null (unused)
+- `getAccountInfo()` — Dead stub, returns null; account data is fetched via `platformGetUserInfo()` directly
+- `getStepPlanStatus()` — Dead stub, returns null; plan data handled by `handleStepPlanStatus()`
+- `getPlanStatus()` — Dead stub, returns null; same as above
 
 ### 3. Platform Login
 
@@ -97,7 +98,26 @@ AGNES-PROXY/
 - `handleStepPlanStatus(req, res)` — Returns subscription/plan status with usage windows (returns test data when `config.testMode` is true)
 - `proxyChatRequest(res, payload, model)` — Core proxy: detect session, check cache, clone payload, normalize tools, forward to upstream with retry loop
 
-### 8. Retry Logic
+### 8. Image & Video Generation
+
+- `isImageOrVideoModel(modelId)` — Returns true if model ID contains "image" or "video" (case-insensitive)
+- `extractImageUrls(msg)` — Extracts `image_url` parts from a message's content array
+- `calcNumFrames(durationSeconds, frameRate=24)` — Converts duration to `num_frames` using formula `8n+1`, clamped to 441 (≈18s at 24fps); parses duration from prompt text (e.g. "5 seconds")
+- `proxyImageRequest(res, payload, requestedModel)` — Handles chat requests routed to image/video models; extracts prompt from last user message, detects image URLs, builds and forwards to `/v1/images/generations` or `/v1/videos`, then wraps result as a chat completion response
+
+**Image routing logic:**
+- 0 input images → `agnes-image-2.1-flash` (text-to-image generation)
+- 1+ input images → `agnes-image-2.0-flash` (multi-image / edit)
+
+**Video routing logic:**
+- 0 input images → text-to-video
+- 1 input image → image-to-video (`image` field)
+- 2+ input images → multi-frame video (`extra_body.image` array)
+- Video jobs are async: proxy polls `/v1/videos/{taskId}` every 4s for up to 10 minutes
+
+**Response format:** Generated URL or base64 is embedded as a markdown image/link in the assistant message content, preserving OpenAI chat completion response structure.
+
+### 9. Retry Logic
 
 - `retryLoop(fn)` — Up to 3 attempts with exponential backoff (`RETRY_DELAY_MS * attempt`, i.e., 5s, 10s, 15s)
 - `MAX_RETRIES = 3` — Maximum retry attempts
@@ -105,14 +125,14 @@ AGNES-PROXY/
 - Retries on: `isModelUnavailableError()` ("this model is currently unavailable") and `isQueryEngineError()` ("not connected to the query engine")
 - All other errors are passed through immediately
 
-### 9. Test Mode
+### 10. Test Mode
 
 - When `config.testMode` is true:
   - `/v1/chat/completions` returns a mock `"Test"` response without calling upstream
   - `/api/step-plan-status` returns synthetic subscription data with fake usage windows
 - Enabled via `TEST_MODE: true` in config
 
-### 10. Request Router (pathname-based)
+### 11. Request Router (pathname-based)
 
 Routes by pathname:
 - `/` or `/dashboard` → Serve `dashboard.html` with no-cache headers
@@ -132,7 +152,7 @@ Routes by pathname:
 - `/v1/models` → OpenAI models
 - `/v1/chat/completions` → OpenAI chat
 
-### 11. Session Tracking & Key Rotation
+### 12. Session Tracking & Key Rotation
 
 - `currentTokenIndex` — Module-level round-robin index
 - `globalSessionCounter` — Monotonically incrementing session ID for each new conversation
@@ -145,7 +165,7 @@ Routes by pathname:
   3. If new fingerprint → rotates to next key round-robin, stores mapping, stamps message with `[KeyName|sessN]`
 - Console logs use `HH:MM:SS [Session#N>KeyName]-[model]-"actual prompt"` format
 
-### 12. Opencode Config
+### 13. Opencode Config
 
 - `setupOpencodeConfig()` — Writes provider config to `~/.config/opencode/opencode.json`
 - Creates `openconfig.b4agnes.json` backup before first edit
@@ -153,7 +173,7 @@ Routes by pathname:
 - Registers each model with its metadata; disabled models go into `blacklist` array
 - Removes legacy `zenith` and `stepfun` providers on startup
 
-### 13. Dashboard (dashboard.html)
+### 14. Dashboard (dashboard.html)
 
 - **Liquid Glass Engine** — Canvas-generated displacement maps with refraction profiles (`calculateRefractionProfile()`, `generateDisplacementMap()`, `generateSpecularMap()`)
 - **SVG Filter Pipeline** — `feGaussianBlur` → `feImage` (displacement) → `feDisplacementMap` → `feColorMatrix` (saturation) → `feComposite` → `feBlend`

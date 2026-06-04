@@ -40,8 +40,8 @@ For any OpenAI-compatible API (local or remote):
         "baseURL": "http://127.0.0.1:8080/v1"
       },
       "models": {
-        "sapiens-ai/agnes-1.5-pro": { "name": "Agnes 1.5 Pro" },
-        "sapiens-ai/agnes-1.5-lite": { "name": "Agnes 1.5 Lite" }
+        "agnes-2.0-flash": { "name": "Agnes 2.0 Flash" },
+        "agnes-1.5-flash": { "name": "Agnes 1.5 Flash" }
       }
     }
   }
@@ -61,7 +61,7 @@ Fields:
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "agnes/sapiens-ai/agnes-1.5-pro"
+  "model": "agnes/agnes-2.0-flash"
 }
 ```
 
@@ -72,7 +72,7 @@ Fields:
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "agnes/sapiens-ai/agnes-1.5-pro",
+  "model": "agnes/agnes-2.0-flash",
   "provider": {
     "agnes": {
       "npm": "@ai-sdk/openai-compatible",
@@ -81,10 +81,11 @@ Fields:
         "baseURL": "http://127.0.0.1:8080/v1"
       },
       "models": {
-        "sapiens-ai/agnes-1.5-pro": { "name": "Agnes 1.5 Pro" },
-        "sapiens-ai/agnes-1.5-lite": { "name": "Agnes 1.5 Lite" },
-        "sapiens-ai/agnes-image-1.2": { "name": "Agnes Image 1.2" },
-        "sapiens-ai/agnes-video-v1.2": { "name": "Agnes Video V1.2" }
+        "agnes-2.0-flash": { "name": "Agnes 2.0 Flash" },
+        "agnes-1.5-flash": { "name": "Agnes 1.5 Flash" },
+        "agnes-image-2.0-flash": { "name": "Agnes Image 2.0" },
+        "agnes-image-2.1-flash": { "name": "Agnes Image 2.1" },
+        "agnes-video-v2.0": { "name": "Agnes Video v2.0" }
       }
     }
   }
