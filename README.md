@@ -393,6 +393,12 @@ dashboard.html
 
 ---
 
+## Credits
+
+Special thanks to [notBlubbll](https://github.com/notBlubbll) for the original Agnes proxy project that this is based on. This repo builds on their work with additional improvements including plan status display, plan-agnostic image generation, multi-key credential management, platform session persistence, and stability fixes.
+
+---
+
 ## License
 
-MIT — Based on the original Agnes proxy, with improvements including plan status display, plan-agnostic image generation, multi-key credential management, platform session persistence, and stability fixes.
+MIT
