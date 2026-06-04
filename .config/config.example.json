@@ -1,0 +1,26 @@
+{
+  "LISTEN_ADDR": "127.0.0.1:8080",
+  "UPSTREAM_BASE_URL": "https://apihub.agnes-ai.com",
+  "API_KEY": "sk-your-agnes-api-key-here",
+  "REQUEST_TIMEOUT": "15m",
+  "API_KEYS": [],
+  "TOKENS": [
+    {
+      "name": "My Key",
+      "token": "sk-your-agnes-api-key-here"
+    }
+  ],
+  "ENABLED_MODELS": [
+    "agnes-2.0-flash",
+    "agnes-1.5-flash",
+    "agnes-image-2.0-flash",
+    "agnes-image-2.1-flash",
+    "agnes-video-v2.0"
+  ],
+  "WALLPAPER_MODE": "none",
+  "WALLPAPER_PROMPT": "realistic vibrant colorful mountain range landscape",
+  "CACHE_TTL": "60s",
+  "CACHE_MAX_SIZE": 100,
+  "CACHE_ENABLED": true,
+  "TEST_MODE": false
+}
